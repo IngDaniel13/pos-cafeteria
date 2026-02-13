@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Producción del Día - POS Cafetería</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <nav class="topbar">
+    <div class="topbar-brand"><span>☕</span> CAFETERÍA Y&V</div>
+    <div class="topbar-nav">
+      <a href="index.html">🛒 POS</a>
+      <a href="produccion.html" class="active">📦 Producción</a>
+      <a href="dashboard.html">📊 Dashboard</a>
+      <a href="admin/index.html">⚙️ Admin</a>
+    </div>
+  </nav>
+
+  <div style="padding:20px;max-width:700px;margin:0 auto">
+    <div class="page-title">📦 Producción del Día
+      <span id="todayDate" style="font-size:0.85rem;color:var(--text-muted);font-weight:400;margin-left:8px"></span>
+    </div>
+
+    <!-- INFO CARD -->
+    <div style="background:var(--warning-bg);border:1.5px solid var(--warning);border-radius:var(--radius);padding:14px;margin-bottom:20px;font-size:0.85rem">
+      ℹ️ <strong>Stock = Producción total del día − Ventas del día.</strong><br>
+      Aquí puedes registrar la producción inicial o agregar más durante el día.
+    </div>
+
+    <!-- SECCIÓN PRODUCCIÓN INICIAL -->
+    <div class="section-card">
+      <div class="section-card-header">
+        <h3>🌅 Producción Inicial del Día</h3>
+        <button class="btn btn-primary btn-sm" onclick="saveInitialProduction()">
+          💾 Guardar Todo
+        </button>
+      </div>
+      <div class="section-card-body">
+        <div id="productionList" class="production-list">
+          <div class="loading-wrap"><div class="spinner"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SECCIÓN STOCK ACTUAL -->
+    <div class="section-card" style="margin-top:20px">
+      <div class="section-card-header">
+        <h3>📊 Stock Actual en Tiempo Real</h3>
+        <button class="btn btn-secondary btn-sm" onclick="loadStockData()">🔄 Actualizar</button>
+      </div>
+      <div class="section-card-body">
+        <div id="stockList">
+          <div class="loading-wrap"><div class="spinner"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: AGREGAR MÁS PRODUCCIÓN -->
+  <div class="modal-overlay d-none" id="modalRestock">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>🔄 Agregar más producción</h3>
+        <button class="modal-close" onclick="closeRestockModal()">✕</button>
+      </div>
+      <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:16px">
+        Producto: <strong id="restockProductName"></strong>
+      </p>
+      <div class="form-group">
+        <label class="form-label">Stock disponible actual</label>
+        <div id="currentStockDisplay" style="font-size:1.1rem;font-weight:700;color:var(--primary);margin-bottom:12px">--</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">¿Cuántas unidades más preparaste?</label>
+        <input type="number" class="form-input" id="restockQtyInput" min="1" placeholder="Ej: 10" style="font-size:1.2rem;font-weight:700;text-align:center">
+      </div>
+      <button class="btn btn-primary" onclick="confirmRestock()">✅ Confirmar Reabastecimiento</button>
+      <button class="btn btn-secondary mt-1" onclick="closeRestockModal()">Cancelar</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="js/config.js"></script>
+  <script>
+    let productsData = [];
+    let stockData = {};
+    let restockProductId = null;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      document.getElementById('todayDate').textContent = new Date().toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      await loadData();
+    });
+
+    async function loadData() {
+      await loadProducts();
+      await loadStockData();
+    }
+
+    async function loadProducts() {
+      const { data } = await supabaseClient.from('products').select('*').eq('active', true).order('name');
+      productsData = data || [];
+      renderProductionInputs();
+    }
+
+    function renderProductionInputs() {
+      const list = document.getElementById('productionList');
+      if (productsData.length === 0) {
+        list.innerHTML = `<p style="text-align:center;color:var(--text-muted)">No hay productos activos. Ve al panel admin para crear productos.</p>`;
+        return;
+      }
+      list.innerHTML = productsData.map(p => `
+        <div class="production-item">
+          <div class="production-item-info">
+            <div class="production-item-name">${p.name}</div>
+            <div class="production-item-stock" id="stockLabel-${p.id}">Cargando stock...</div>
+          </div>
+          <input type="number" class="production-input" id="qty-${p.id}" min="0" placeholder="0">
+        </div>
+      `).join('');
+    }
+
+    async function loadStockData() {
+      const today = new Date().toISOString().split('T')[0];
+      const stockList = document.getElementById('stockList');
+
+      // Obtener producción del día
+      const { data: production } = await supabaseClient
+        .from('daily_production')
+        .select('product_id, quantity_added, created_at')
+        .eq('date', today);
+
+      // Obtener ventas del día
+      const { data: soldItems } = await supabaseClient
+        .from('sale_items')
+        .select('product_id, quantity, sales!inner(created_at)')
+        .gte('sales.created_at', `${today}T00:00:00`)
+        .lte('sales.created_at', `${today}T23:59:59`);
+
+      const prodMap = {};
+      (production || []).forEach(r => prodMap[r.product_id] = (prodMap[r.product_id] || 0) + r.quantity_added);
+      const soldMap = {};
+      (soldItems || []).forEach(r => soldMap[r.product_id] = (soldMap[r.product_id] || 0) + r.quantity);
+
+      // Actualizar labels de stock en inputs
+      productsData.forEach(p => {
+        const produced = prodMap[p.id] || 0;
+        const sold = soldMap[p.id] || 0;
+        const stock = Math.max(0, produced - sold);
+        const label = document.getElementById(`stockLabel-${p.id}`);
+        if (label) {
+          if (produced === 0) {
+            label.textContent = 'Sin producción registrada hoy';
+            label.style.color = 'var(--text-muted)';
+          } else {
+            label.textContent = `Producido: ${produced} | Vendido: ${sold} | Disponible: ${stock}`;
+            label.style.color = stock <= 3 ? (stock === 0 ? 'var(--danger)' : 'var(--warning)') : 'var(--success)';
+          }
+        }
+        stockData[p.id] = { produced, sold, stock };
+      });
+
+      if (productsData.length === 0) {
+        stockList.innerHTML = '<p style="text-align:center;color:var(--text-muted)">No hay productos activos.</p>';
+        return;
+      }
+
+      stockList.innerHTML = `
+        <table style="width:100%;border-collapse:collapse;font-size:0.85rem">
+          <thead>
+            <tr style="border-bottom:1.5px solid var(--border)">
+              <th style="padding:8px 0;text-align:left;color:var(--text-muted)">Producto</th>
+              <th style="padding:8px 4px;text-align:center;color:var(--text-muted)">Prod.</th>
+              <th style="padding:8px 4px;text-align:center;color:var(--text-muted)">Vend.</th>
+              <th style="padding:8px 4px;text-align:center;color:var(--text-muted)">Stock</th>
+              <th style="padding:8px 0;text-align:right"></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${productsData.map(p => {
+              const s = stockData[p.id] || { produced: 0, sold: 0, stock: 0 };
+              const stockColor = s.stock === 0 ? 'var(--danger)' : s.stock <= 3 ? 'var(--warning)' : 'var(--success)';
+              return `
+              <tr style="border-bottom:1px solid var(--border)">
+                <td style="padding:10px 0;font-weight:600">${p.name}</td>
+                <td style="text-align:center;padding:10px 4px">${s.produced}</td>
+                <td style="text-align:center;padding:10px 4px">${s.sold}</td>
+                <td style="text-align:center;font-weight:800;color:${stockColor};padding:10px 4px">${s.stock}</td>
+                <td style="text-align:right;padding:10px 0">
+                  <button class="btn btn-secondary btn-sm" onclick="openRestockModal('${p.id}', '${p.name}', ${s.stock})">
+                    ➕ Más
+                  </button>
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>`;
+    }
+
+    async function saveInitialProduction() {
+      const today = new Date().toISOString().split('T')[0];
+      const records = [];
+
+      productsData.forEach(p => {
+        const input = document.getElementById(`qty-${p.id}`);
+        const qty = parseInt(input?.value) || 0;
+        if (qty > 0) {
+          records.push({ product_id: p.id, quantity_added: qty, date: today });
+        }
+      });
+
+      if (records.length === 0) {
+        showToast('Ingresa al menos una cantidad', 'warning');
+        return;
+      }
+
+      const { error } = await supabaseClient.from('daily_production').insert(records);
+      if (error) {
+        showToast('Error guardando producción', 'error');
+        return;
+      }
+
+      // Limpiar inputs
+      productsData.forEach(p => {
+        const input = document.getElementById(`qty-${p.id}`);
+        if (input) input.value = '';
+      });
+
+      showToast(`✅ Producción guardada (${records.length} productos)`, 'success');
+      await loadStockData();
+    }
+
+    function openRestockModal(productId, productName, currentStock) {
+      restockProductId = productId;
+      document.getElementById('restockProductName').textContent = productName;
+      document.getElementById('currentStockDisplay').textContent = `${currentStock} unidades disponibles`;
+      document.getElementById('restockQtyInput').value = '';
+      document.getElementById('modalRestock').classList.remove('d-none');
+    }
+
+    function closeRestockModal() {
+      document.getElementById('modalRestock').classList.add('d-none');
+      restockProductId = null;
+    }
+
+    async function confirmRestock() {
+      const qty = parseInt(document.getElementById('restockQtyInput').value) || 0;
+      if (qty <= 0) { showToast('Ingresa una cantidad válida', 'warning'); return; }
+
+      const today = new Date().toISOString().split('T')[0];
+      const { error } = await supabaseClient.from('daily_production').insert({
+        product_id: restockProductId,
+        quantity_added: qty,
+        date: today
+      });
+
+      if (error) { showToast('Error guardando reabastecimiento', 'error'); return; }
+
+      closeRestockModal();
+      showToast(`✅ +${qty} unidades agregadas al stock`, 'success');
+      await loadStockData();
+    }
+
+    function showToast(msg, type = 'success') {
+      let c = document.getElementById('toastContainer');
+      if (!c) { c = document.createElement('div'); c.id = 'toastContainer'; c.className = 'toast-container'; document.body.appendChild(c); }
+      const t = document.createElement('div');
+      t.className = `toast ${type}`;
+      t.textContent = msg;
+      c.appendChild(t);
+      setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; setTimeout(() => t.remove(), 300); }, 3000);
+    }
+  </script>
+</body>
+</html>

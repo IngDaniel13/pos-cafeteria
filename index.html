@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>CAFETERÍA Y&V</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- TOPBAR -->
+  <nav class="topbar">
+    <div class="topbar-brand">
+      <span>☕</span> CAFETERÍA Y&V
+    </div>
+    <div class="topbar-nav">
+      <a href="index.html" class="active">🛒 POS</a>
+      <a href="produccion.html">📦 Producción</a>
+      <a href="dashboard.html">📊 Dashboard</a>
+      <a href="admin/index.html">⚙️ Admin</a>
+    </div>
+  </nav>
+
+  <!-- SPINNER GLOBAL -->
+  <div id="globalSpinner" style="display:flex;align-items:center;justify-content:center;padding:80px">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- LAYOUT PRINCIPAL -->
+  <div class="main-layout" id="mainLayout" style="display:none">
+
+    <!-- PANEL PRODUCTOS -->
+    <div class="products-panel">
+      <!-- Filtro de categorías -->
+      <div class="categories-bar" id="categoriesBar"></div>
+
+      <!-- Grilla de productos -->
+      <div class="products-grid" id="productsGrid">
+        <!-- Cargado dinámicamente -->
+      </div>
+    </div>
+
+    <!-- PANEL CARRITO -->
+    <div class="cart-panel" id="cartPanel">
+      <div class="cart-header" id="cartHeader">
+        <h2>
+          🛒 Carrito
+          <span class="cart-badge" id="cartBadge" style="display:none">0</span>
+        </h2>
+        <span class="cart-toggle" id="cartToggleIcon">▲</span>
+      </div>
+
+      <div class="cart-items" id="cartItems">
+        <div class="cart-empty">
+          <div class="cart-empty-icon">🛒</div>
+          <p>Agrega productos para comenzar</p>
+        </div>
+      </div>
+
+      <div class="cart-footer">
+        <div class="cart-total">
+          <span class="cart-total-label">Total a pagar</span>
+          <span class="cart-total-amount" id="cartTotal">$0</span>
+        </div>
+        <button class="btn btn-primary" id="finalizeBtn" disabled onclick="openFinalizeModal()">
+          ✅ Finalizar Venta
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: FINALIZAR VENTA -->
+  <div class="modal-overlay d-none" id="modalFinalize">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>💳 Finalizar Venta</h3>
+        <button class="modal-close" onclick="closeFinalizeModal()">✕</button>
+      </div>
+
+      <div class="modal-total-display">
+        <p>Total a cobrar</p>
+        <div class="big-amount" id="modalTotalDisplay">$0</div>
+      </div>
+
+      <p style="font-size:0.85rem;font-weight:600;color:var(--text-muted);margin-bottom:12px">Método de pago</p>
+      <div class="payment-methods">
+        <button class="payment-btn" data-method="efectivo" onclick="selectPaymentMethod('efectivo')">
+          <span class="payment-btn-icon">💵</span>
+          Efectivo
+        </button>
+        <button class="payment-btn" data-method="transferencia" onclick="selectPaymentMethod('transferencia')">
+          <span class="payment-btn-icon">📱</span>
+          Nequi / Transf.
+        </button>
+      </div>
+
+      <button class="btn btn-primary" id="confirmSaleBtn" disabled onclick="finalizeSale()">
+        ✅ Confirmar Venta
+      </button>
+      <button class="btn btn-secondary mt-1" onclick="closeFinalizeModal()">
+        Cancelar
+      </button>
+    </div>
+  </div>
+
+  <!-- SCRIPTS -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/pos.js"></script>
+  <script>
+    // Mostrar layout cuando cargue
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(() => {
+        document.getElementById('globalSpinner').style.display = 'none';
+        document.getElementById('mainLayout').style.display = 'flex';
+      }, 100);
+    });
+  </script>
+</body>
+</html>

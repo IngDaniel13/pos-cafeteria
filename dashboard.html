@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - POS Cafetería</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <nav class="topbar">
+    <div class="topbar-brand"><span>☕</span> CAFETERÍA Y&V</div>
+    <div class="topbar-nav">
+      <a href="index.html">🛒 POS</a>
+      <a href="produccion.html">📦 Producción</a>
+      <a href="dashboard.html" class="active">📊 Dashboard</a>
+      <a href="admin/index.html">⚙️ Admin</a>
+    </div>
+  </nav>
+
+  <div style="padding:20px;max-width:1000px;margin:0 auto">
+    <div class="flex-between" style="margin-bottom:20px">
+      <div class="page-title" style="margin-bottom:0">📊 Dashboard del Día</div>
+      <button class="btn btn-secondary btn-sm" onclick="loadDashboard()">🔄 Actualizar</button>
+    </div>
+
+    <!-- STATS CARDS -->
+    <div class="dashboard-grid" id="statsGrid">
+      <div class="stat-card"><div class="stat-icon">💰</div><div class="stat-value" id="statTotal">--</div><div class="stat-label">Total vendido</div></div>
+      <div class="stat-card"><div class="stat-icon">💵</div><div class="stat-value" id="statEfectivo">--</div><div class="stat-label">Efectivo en caja</div></div>
+      <div class="stat-card"><div class="stat-icon">📱</div><div class="stat-value" id="statTransfer">--</div><div class="stat-label">Nequi / Transf.</div></div>
+      <div class="stat-card"><div class="stat-icon">🧾</div><div class="stat-value" id="statVentas">--</div><div class="stat-label">Total ventas</div></div>
+    </div>
+
+    <!-- PRODUCTOS MÁS VENDIDOS -->
+    <div class="section-card">
+      <div class="section-card-header"><h3>🏆 Productos más vendidos hoy</h3></div>
+      <div class="section-card-body" id="topProductsList">
+        <div class="loading-wrap"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- STOCK RESTANTE -->
+    <div class="section-card" style="margin-top:16px">
+      <div class="section-card-header"><h3>📦 Stock restante por producto</h3></div>
+      <div class="section-card-body" id="stockRemainingList">
+        <div class="loading-wrap"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- HISTORIAL DE REABASTECIMIENTOS -->
+    <div class="section-card" style="margin-top:16px;margin-bottom:30px">
+      <div class="section-card-header"><h3>🔄 Reabastecimientos del día</h3></div>
+      <div class="section-card-body" id="restockHistoryList">
+        <div class="loading-wrap"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- HISTORIAL DE VENTAS -->
+    <div class="section-card" style="margin-bottom:40px">
+      <div class="section-card-header"><h3>🧾 Últimas ventas</h3></div>
+      <div class="section-card-body" id="salesHistoryList">
+        <div class="loading-wrap"><div class="spinner"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="js/config.js"></script>
+  <script>
+    function formatCurrency(amount) {
+      return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(amount || 0);
+    }
+    function getTodayDate() { return new Date().toISOString().split('T')[0]; }
+
+    document.addEventListener('DOMContentLoaded', loadDashboard);
+
+    async function loadDashboard() {
+      const today = getTodayDate();
+      const todayStart = `${today}T00:00:00`;
+      const todayEnd = `${today}T23:59:59`;
+
+      // ── Ventas del día ──
+      const { data: sales } = await supabaseClient
+        .from('sales')
+        .select('*')
+        .gte('created_at', todayStart)
+        .lte('created_at', todayEnd)
+        .order('created_at', { ascending: false });
+
+      const totalVentas = (sales || []).length;
+      const totalAmount = (sales || []).reduce((s, v) => s + Number(v.total_amount), 0);
+      const totalEfectivo = (sales || []).filter(v => v.payment_method === 'efectivo').reduce((s, v) => s + Number(v.total_amount), 0);
+      const totalTransfer = (sales || []).filter(v => v.payment_method === 'transferencia').reduce((s, v) => s + Number(v.total_amount), 0);
+
+      document.getElementById('statTotal').textContent = formatCurrency(totalAmount);
+      document.getElementById('statEfectivo').textContent = formatCurrency(totalEfectivo);
+      document.getElementById('statTransfer').textContent = formatCurrency(totalTransfer);
+      document.getElementById('statVentas').textContent = totalVentas;
+
+      // ── Productos más vendidos ──
+      const { data: saleItems } = await supabaseClient
+        .from('sale_items')
+        .select('product_id, quantity, unit_price, subtotal, products(name)')
+        .gte('created_at', todayStart)
+        .lte('created_at', todayEnd);
+
+      const productMap = {};
+      (saleItems || []).forEach(item => {
+        const key = item.product_id;
+        if (!productMap[key]) productMap[key] = { name: item.products?.name || 'Desconocido', qty: 0, total: 0 };
+        productMap[key].qty += item.quantity;
+        productMap[key].total += Number(item.subtotal);
+      });
+      const topProducts = Object.values(productMap).sort((a, b) => b.qty - a.qty);
+
+      const topList = document.getElementById('topProductsList');
+      if (topProducts.length === 0) {
+        topList.innerHTML = '<p style="color:var(--text-muted);text-align:center">Sin ventas aún hoy</p>';
+      } else {
+        topList.innerHTML = topProducts.map((p, i) => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="font-weight:800;color:var(--primary);min-width:24px">#${i+1}</span>
+              <span style="font-weight:600">${p.name}</span>
+            </div>
+            <div style="text-align:right">
+              <div style="font-weight:700">${p.qty} unid.</div>
+              <div style="font-size:0.75rem;color:var(--text-muted)">${formatCurrency(p.total)}</div>
+            </div>
+          </div>`).join('');
+      }
+
+      // ── Stock restante ──
+      const { data: allProducts } = await supabaseClient.from('products').select('id,name').eq('active', true);
+      const { data: production } = await supabaseClient.from('daily_production').select('product_id,quantity_added').eq('date', today);
+      const prodMap = {};
+      (production || []).forEach(r => prodMap[r.product_id] = (prodMap[r.product_id] || 0) + r.quantity_added);
+      const soldMap = {};
+      (saleItems || []).forEach(r => soldMap[r.product_id] = (soldMap[r.product_id] || 0) + r.quantity);
+
+      const stockEl = document.getElementById('stockRemainingList');
+      if (!allProducts || allProducts.length === 0) {
+        stockEl.innerHTML = '<p style="color:var(--text-muted);text-align:center">Sin productos</p>';
+      } else {
+        stockEl.innerHTML = allProducts.map(p => {
+          const prod = prodMap[p.id] || 0;
+          const sold = soldMap[p.id] || 0;
+          const stock = Math.max(0, prod - sold);
+          const color = stock === 0 ? 'var(--danger)' : stock <= 3 ? 'var(--warning)' : 'var(--success)';
+          const bar = prod > 0 ? Math.round((stock / prod) * 100) : 0;
+          return `
+          <div style="padding:10px 0;border-bottom:1px solid var(--border)">
+            <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+              <span style="font-weight:600">${p.name}</span>
+              <span style="font-weight:800;color:${color}">${stock} restantes</span>
+            </div>
+            <div style="background:var(--border);border-radius:999px;height:6px">
+              <div style="background:${color};border-radius:999px;height:6px;width:${bar}%;transition:width 0.5s"></div>
+            </div>
+            <div style="font-size:0.72rem;color:var(--text-muted);margin-top:3px">Producido: ${prod} | Vendido: ${sold}</div>
+          </div>`;
+        }).join('');
+      }
+
+      // ── Historial de reabastecimientos ──
+      const { data: restockHistory } = await supabaseClient
+        .from('daily_production')
+        .select('*, products(name)')
+        .eq('date', today)
+        .order('created_at', { ascending: false });
+
+      const restockEl = document.getElementById('restockHistoryList');
+      if (!restockHistory || restockHistory.length === 0) {
+        restockEl.innerHTML = '<p style="color:var(--text-muted);text-align:center">Sin registros hoy</p>';
+      } else {
+        restockEl.innerHTML = restockHistory.map(r => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)">
+            <div>
+              <div style="font-weight:600">${r.products?.name || 'Desconocido'}</div>
+              <div style="font-size:0.75rem;color:var(--text-muted)">${new Date(r.created_at).toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'})}</div>
+            </div>
+            <span style="background:#C6F6D5;color:#276749;padding:4px 12px;border-radius:999px;font-weight:700;font-size:0.85rem">+${r.quantity_added}</span>
+          </div>`).join('');
+      }
+
+      // ── Historial de ventas ──
+      const salesEl = document.getElementById('salesHistoryList');
+      if (!sales || sales.length === 0) {
+        salesEl.innerHTML = '<p style="color:var(--text-muted);text-align:center">Sin ventas aún hoy</p>';
+      } else {
+        salesEl.innerHTML = sales.slice(0, 20).map(v => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border)">
+            <div>
+              <div style="font-weight:600">${v.payment_method === 'efectivo' ? '💵 Efectivo' : '📱 Transferencia'}</div>
+              <div style="font-size:0.75rem;color:var(--text-muted)">${new Date(v.created_at).toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'})}</div>
+            </div>
+            <span style="font-weight:800;font-size:1rem;color:var(--primary)">${formatCurrency(v.total_amount)}</span>
+          </div>`).join('');
+      }
+    }
+  </script>
+</body>
+</html>

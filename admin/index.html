@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel Admin - POS Cafetería</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body>
+
+  <nav class="topbar">
+    <div class="topbar-brand"><span>☕</span> ADMIN CAFETERÍA Y&V</div>
+    <div class="topbar-nav">
+      <a href="../index.html">🛒 POS</a>
+      <a href="../dashboard.html">📊 Dashboard</a>
+      <span id="userEmail" style="color:#A0AEC0;font-size:0.78rem;padding:0 8px"></span>
+      <button onclick="logout()" style="background:none;border:none;color:#A0AEC0;cursor:pointer;font-size:0.82rem;padding:6px 12px">🚪 Salir</button>
+    </div>
+  </nav>
+
+  <div class="admin-layout">
+    <!-- SIDEBAR -->
+    <div class="admin-sidebar">
+      <div style="padding:16px 20px;font-weight:800;font-size:0.9rem;color:#fff;border-bottom:1px solid rgba(255,255,255,0.1);margin-bottom:8px">⚙️ Panel Admin</div>
+      <a class="admin-sidebar-item active" onclick="showSection('products')">📦 Productos</a>
+      <a class="admin-sidebar-item" onclick="showSection('categories')">🏷️ Categorías</a>
+    </div>
+
+    <!-- CONTENIDO PRINCIPAL -->
+    <div class="admin-main">
+
+      <!-- SECCIÓN PRODUCTOS -->
+      <div id="sectionProducts">
+        <div class="flex-between" style="margin-bottom:20px">
+          <div class="page-title" style="margin-bottom:0">📦 Productos</div>
+          <button class="btn btn-primary btn-sm" onclick="openProductModal()">+ Nuevo Producto</button>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Imagen</th>
+                <th>Nombre</th>
+                <th>Precio</th>
+                <th>Categoría</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="productsTableBody">
+              <tr><td colspan="6" class="text-center" style="padding:30px"><div class="spinner"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SECCIÓN CATEGORÍAS -->
+      <div id="sectionCategories" style="display:none">
+        <div class="flex-between" style="margin-bottom:20px">
+          <div class="page-title" style="margin-bottom:0">🏷️ Categorías</div>
+          <button class="btn btn-primary btn-sm" onclick="openCategoryModal()">+ Nueva Categoría</button>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Productos</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="categoriesTableBody">
+              <tr><td colspan="3" class="text-center" style="padding:30px"><div class="spinner"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- MODAL: PRODUCTO -->
+  <div class="modal-overlay d-none" id="modalProduct">
+    <div class="modal" style="max-width:520px">
+      <div class="modal-header">
+        <h3 id="modalProductTitle">Nuevo Producto</h3>
+        <button class="modal-close" onclick="closeProductModal()">✕</button>
+      </div>
+
+      <input type="hidden" id="productId">
+
+      <!-- Vista previa imagen -->
+      <div class="form-group">
+        <label class="form-label">Imagen del producto</label>
+        <div class="image-upload-area" onclick="document.getElementById('imageFileInput').click()">
+          <img id="imagePreview" class="image-preview d-none" src="" alt="Vista previa">
+          <div id="imageUploadText">
+            <div style="font-size:2rem">📷</div>
+            <div style="font-size:0.82rem;color:var(--text-muted);margin-top:4px">Clic para subir imagen (Cloudinary)</div>
+          </div>
+        </div>
+        <input type="file" id="imageFileInput" accept="image/*" style="display:none" onchange="previewAndUpload(this)">
+        <input type="hidden" id="imageUrlInput">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Nombre del producto *</label>
+        <input type="text" class="form-input" id="productName" placeholder="Ej: Empanada de carne">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Precio *</label>
+        <input type="number" class="form-input" id="productPrice" min="0" step="100" placeholder="Ej: 3500">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Categoría</label>
+        <select class="form-select" id="productCategory">
+          <option value="">Sin categoría</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" style="display:flex;align-items:center;gap:10px;cursor:pointer">
+          <label class="switch">
+            <input type="checkbox" id="productActive" checked>
+            <span class="slider"></span>
+          </label>
+          Producto activo (visible en POS)
+        </label>
+      </div>
+
+      <div id="uploadProgress" class="d-none" style="background:var(--warning-bg);padding:10px;border-radius:8px;font-size:0.82rem;text-align:center;margin-bottom:12px">
+        ⏳ Subiendo imagen a Cloudinary...
+      </div>
+
+      <button class="btn btn-primary" id="saveProductBtn" onclick="saveProduct()">💾 Guardar Producto</button>
+      <button class="btn btn-secondary mt-1" onclick="closeProductModal()">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- MODAL: CATEGORÍA -->
+  <div class="modal-overlay d-none" id="modalCategory">
+    <div class="modal" style="max-width:400px">
+      <div class="modal-header">
+        <h3 id="modalCategoryTitle">Nueva Categoría</h3>
+        <button class="modal-close" onclick="closeCategoryModal()">✕</button>
+      </div>
+      <input type="hidden" id="categoryId">
+      <div class="form-group">
+        <label class="form-label">Nombre de la categoría *</label>
+        <input type="text" class="form-input" id="categoryName" placeholder="Ej: Bebidas, Empanadas...">
+      </div>
+      <button class="btn btn-primary" onclick="saveCategory()">💾 Guardar</button>
+      <button class="btn btn-secondary mt-1" onclick="closeCategoryModal()">Cancelar</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="../js/config.js"></script>
+  <script>
+    let categories = [];
+    let products = [];
+
+    // ── AUTH CHECK ──
+    supabaseClient.auth.getSession().then(({ data: { session } }) => {
+      if (!session) { window.location.href = 'login.html'; return; }
+      document.getElementById('userEmail').textContent = session.user.email;
+      loadAll();
+    });
+
+    async function logout() {
+      await supabaseClient.auth.signOut();
+      window.location.href = 'login.html';
+    }
+
+    async function loadAll() {
+      await loadCategories();
+      await loadProducts();
+    }
+
+    // ── CATEGORÍAS ──
+    async function loadCategories() {
+      const { data } = await supabaseClient.from('categories').select('*').order('name');
+      categories = data || [];
+      renderCategoriesTable();
+      populateCategorySelect();
+    }
+
+    function renderCategoriesTable() {
+      const tbody = document.getElementById('categoriesTableBody');
+      if (categories.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:30px;color:var(--text-muted)">No hay categorías. Crea una.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = categories.map(cat => {
+        const count = products.filter(p => p.category_id === cat.id).length;
+        return `
+        <tr>
+          <td><strong>${cat.name}</strong></td>
+          <td>${count} productos</td>
+          <td>
+            <div class="gap-2">
+              <button class="btn btn-secondary btn-sm" onclick="openCategoryModal('${cat.id}','${escHtml(cat.name)}')">✏️ Editar</button>
+              <button class="btn btn-sm" style="background:#FFF5F5;color:var(--danger);border:1px solid #FED7D7" onclick="deleteCategory('${cat.id}')">🗑️ Eliminar</button>
+            </div>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    function populateCategorySelect() {
+      const select = document.getElementById('productCategory');
+      select.innerHTML = '<option value="">Sin categoría</option>' +
+        categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+    }
+
+    function openCategoryModal(id = '', name = '') {
+      document.getElementById('categoryId').value = id;
+      document.getElementById('categoryName').value = name;
+      document.getElementById('modalCategoryTitle').textContent = id ? 'Editar Categoría' : 'Nueva Categoría';
+      document.getElementById('modalCategory').classList.remove('d-none');
+    }
+
+    function closeCategoryModal() { document.getElementById('modalCategory').classList.add('d-none'); }
+
+    async function saveCategory() {
+      const id = document.getElementById('categoryId').value;
+      const name = document.getElementById('categoryName').value.trim();
+      if (!name) { showToast('El nombre es obligatorio', 'warning'); return; }
+
+      if (id) {
+        const { error } = await supabaseClient.from('categories').update({ name }).eq('id', id);
+        if (error) { showToast('Error actualizando categoría', 'error'); return; }
+      } else {
+        const { error } = await supabaseClient.from('categories').insert({ name });
+        if (error) { showToast('Error creando categoría', 'error'); return; }
+      }
+      closeCategoryModal();
+      showToast('✅ Categoría guardada', 'success');
+      await loadCategories();
+    }
+
+    async function deleteCategory(id) {
+      if (!confirm('¿Eliminar esta categoría? Los productos no serán eliminados.')) return;
+      const { error } = await supabaseClient.from('categories').delete().eq('id', id);
+      if (error) { showToast('Error eliminando categoría', 'error'); return; }
+      showToast('Categoría eliminada', 'success');
+      await loadCategories();
+    }
+
+    // ── PRODUCTOS ──
+    async function loadProducts() {
+      const { data } = await supabaseClient.from('products').select('*, categories(name)').order('name');
+      products = data || [];
+      renderProductsTable();
+    }
+
+    function renderProductsTable() {
+      const tbody = document.getElementById('productsTableBody');
+      if (products.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:30px;color:var(--text-muted)">No hay productos. Crea el primero.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = products.map(p => `
+        <tr>
+          <td>${p.image_url
+            ? `<img src="${p.image_url}" class="product-thumb" alt="${escHtml(p.name)}">`
+            : `<div class="product-thumb" style="background:#f0f0f0;display:flex;align-items:center;justify-content:center">☕</div>`}
+          </td>
+          <td><strong>${escHtml(p.name)}</strong></td>
+          <td>${formatCurrency(p.price)}</td>
+          <td>${p.categories?.name || '<span style="color:var(--text-muted)">—</span>'}</td>
+          <td>
+            <label class="switch">
+              <input type="checkbox" ${p.active ? 'checked' : ''} onchange="toggleProductActive('${p.id}', this.checked)">
+              <span class="slider"></span>
+            </label>
+          </td>
+          <td>
+            <div class="gap-2">
+              <button class="btn btn-secondary btn-sm" onclick="openProductModal('${p.id}')">✏️ Editar</button>
+              <button class="btn btn-sm" style="background:#FFF5F5;color:var(--danger);border:1px solid #FED7D7" onclick="deleteProduct('${p.id}')">🗑️</button>
+            </div>
+          </td>
+        </tr>`).join('');
+    }
+
+    function openProductModal(productId = null) {
+      document.getElementById('productId').value = productId || '';
+      document.getElementById('productName').value = '';
+      document.getElementById('productPrice').value = '';
+      document.getElementById('productCategory').value = '';
+      document.getElementById('productActive').checked = true;
+      document.getElementById('imageUrlInput').value = '';
+      document.getElementById('imagePreview').classList.add('d-none');
+      document.getElementById('imageUploadText').style.display = 'block';
+      document.getElementById('modalProductTitle').textContent = productId ? 'Editar Producto' : 'Nuevo Producto';
+
+      if (productId) {
+        const p = products.find(x => x.id === productId);
+        if (p) {
+          document.getElementById('productName').value = p.name;
+          document.getElementById('productPrice').value = p.price;
+          document.getElementById('productCategory').value = p.category_id || '';
+          document.getElementById('productActive').checked = p.active;
+          if (p.image_url) {
+            document.getElementById('imageUrlInput').value = p.image_url;
+            document.getElementById('imagePreview').src = p.image_url;
+            document.getElementById('imagePreview').classList.remove('d-none');
+            document.getElementById('imageUploadText').style.display = 'none';
+          }
+        }
+      }
+      document.getElementById('modalProduct').classList.remove('d-none');
+    }
+
+    function closeProductModal() { document.getElementById('modalProduct').classList.add('d-none'); }
+
+    async function previewAndUpload(input) {
+      const file = input.files[0];
+      if (!file) return;
+
+      // Preview local
+      const reader = new FileReader();
+      reader.onload = e => {
+        document.getElementById('imagePreview').src = e.target.result;
+        document.getElementById('imagePreview').classList.remove('d-none');
+        document.getElementById('imageUploadText').style.display = 'none';
+      };
+      reader.readAsDataURL(file);
+
+      // Subir a Cloudinary
+      document.getElementById('uploadProgress').classList.remove('d-none');
+      document.getElementById('saveProductBtn').disabled = true;
+      try {
+        const url = await uploadToCloudinary(file);
+        document.getElementById('imageUrlInput').value = url;
+        showToast('✅ Imagen subida a Cloudinary', 'success');
+      } catch (e) {
+        showToast('Error subiendo imagen. Verifica tu configuración de Cloudinary.', 'error');
+      } finally {
+        document.getElementById('uploadProgress').classList.add('d-none');
+        document.getElementById('saveProductBtn').disabled = false;
+      }
+    }
+
+    async function saveProduct() {
+      const id = document.getElementById('productId').value;
+      const name = document.getElementById('productName').value.trim();
+      const price = parseFloat(document.getElementById('productPrice').value);
+      const category_id = document.getElementById('productCategory').value || null;
+      const active = document.getElementById('productActive').checked;
+      const image_url = document.getElementById('imageUrlInput').value || null;
+
+      if (!name || isNaN(price)) { showToast('Nombre y precio son obligatorios', 'warning'); return; }
+
+      const payload = { name, price, category_id, active, image_url };
+
+      if (id) {
+        const { error } = await supabaseClient.from('products').update(payload).eq('id', id);
+        if (error) { showToast('Error actualizando producto', 'error'); return; }
+      } else {
+        const { error } = await supabaseClient.from('products').insert(payload);
+        if (error) { showToast('Error creando producto', 'error'); return; }
+      }
+
+      closeProductModal();
+      showToast('✅ Producto guardado', 'success');
+      await loadProducts();
+    }
+
+    async function toggleProductActive(id, active) {
+      await supabaseClient.from('products').update({ active }).eq('id', id);
+      const p = products.find(x => x.id === id);
+      if (p) p.active = active;
+      showToast(active ? 'Producto activado' : 'Producto desactivado');
+    }
+
+    async function deleteProduct(id) {
+      if (!confirm('¿Eliminar este producto? Esta acción no se puede deshacer.')) return;
+      const { error } = await supabaseClient.from('products').delete().eq('id', id);
+      if (error) { showToast('Error eliminando producto', 'error'); return; }
+      showToast('Producto eliminado', 'success');
+      await loadProducts();
+    }
+
+    // ── NAVEGACIÓN ──
+    function showSection(section) {
+      document.getElementById('sectionProducts').style.display = section === 'products' ? 'block' : 'none';
+      document.getElementById('sectionCategories').style.display = section === 'categories' ? 'block' : 'none';
+      document.querySelectorAll('.admin-sidebar-item').forEach((el, i) => {
+        el.classList.toggle('active', (i === 0 && section === 'products') || (i === 1 && section === 'categories'));
+      });
+    }
+
+    // ── UTILIDADES ──
+    function formatCurrency(amount) {
+      return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(amount || 0);
+    }
+
+    function escHtml(str) {
+      return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    function showToast(msg, type = 'success') {
+      let c = document.getElementById('toastContainer');
+      if (!c) { c = document.createElement('div'); c.id = 'toastContainer'; c.className = 'toast-container'; document.body.appendChild(c); }
+      const t = document.createElement('div'); t.className = `toast ${type}`; t.textContent = msg;
+      c.appendChild(t);
+      setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; setTimeout(() => t.remove(), 300); }, 3000);
+    }
+  </script>
+</body>
+</html>
