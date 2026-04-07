@@ -7,13 +7,9 @@ Sistema de Punto de Venta (POS) diseñado para gestionar pedidos y ventas en una
 https://pos-cafeteria.netlify.app/
 
 ## Herramientas y Tecnologías Utilizadas
-
-- **Lenguaje**: Python 3.x
-- **Framework**: Flask para el backend web.
-- **Base de Datos**: SQLite para almacenamiento local.
-- **Frontend**: HTML/CSS/JavaScript con Bootstrap.
-- **Control de Versiones**: Git.
-- **Entorno de Desarrollo**: Visual Studio Code.
+- **Supabase**
+- **HTML/CSS/JavaScript**
+- **Git**
 
 ## Despliegue
 
